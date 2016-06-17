@@ -8,7 +8,7 @@ import (
     "bufio"
     "strings"
     "container/heap"
-    orsa "github.com/adamschaub/orsa_matcher"
+    matcher "github.com/adamschaub/orsa_matcher"
     "github.com/gocarina/gocsv"
 )
 
@@ -64,8 +64,8 @@ func checkFlags() bool {
     return (*team1 != "" && *team2 != "") || (*rankFileName != "" && *groupsFileName != "")
 }
 
-func PlaceExtraTeam(matches *[]orsa.MatchGroup, ranks *orsa.RankedList, groups GroupMap) {
-    team := heap.Pop(ranks).(orsa.TeamRank)
+func PlaceExtraTeam(matches *[]matcher.MatchGroup, ranks *matcher.RankedList, groups GroupMap) {
+    team := heap.Pop(ranks).(matcher.TeamRank)
     bestFit := 0
     bestFitConflicts := 0
     for i := len(*matches)-1; i >= 0; i-- {
@@ -109,32 +109,32 @@ func PlaceExtraTeam(matches *[]orsa.MatchGroup, ranks *orsa.RankedList, groups G
     (*matches)[bestFit].N++
 }
 
-func DisbandMatch (match orsa.MatchGroup, pool *orsa.RankedList) {
+func DisbandMatch (match matcher.MatchGroup, pool *matcher.RankedList) {
     for _, t := range match.Teams {
         if t.Name == "" { continue }
         heap.Push(pool, t)
     }
 }
 
-func MakeMatches(matches []orsa.MatchGroup, interleave []orsa.TeamRank, ranks *orsa.RankedList, groups GroupMap) []orsa.MatchGroup {
-    deferredTeams := []orsa.TeamRank{}
+func MakeMatches(matches []matcher.MatchGroup, interleave []matcher.TeamRank, ranks *matcher.RankedList, groups GroupMap) []matcher.MatchGroup {
+    deferredTeams := []matcher.TeamRank{}
     for ranks.Len() >= MinGroupSize && ranks.Len() > 1 {
 
 
-        var firstTeam orsa.TeamRank
+        var firstTeam matcher.TeamRank
         if len(interleave) > 0 {
             firstTeam = interleave[0]
             interleave = interleave[1:len(interleave)]
         } else {
-            firstTeam = heap.Pop(ranks).(orsa.TeamRank)
+            firstTeam = heap.Pop(ranks).(matcher.TeamRank)
         }
-        currentMatch := &orsa.MatchGroup{Teams: [4]orsa.TeamRank{firstTeam,}, N: 1, AvgPoints: float64(firstTeam.Points)}
+        currentMatch := &matcher.MatchGroup{Teams: [4]matcher.TeamRank{firstTeam,}, N: 1, AvgPoints: float64(firstTeam.Points)}
 
         validTeams := true
         for ( ranks.Len() > 0 || len(interleave) > 0 ) && currentMatch.N < StdGroupSize && validTeams {
-            var team orsa.TeamRank
+            var team matcher.TeamRank
             if ranks.Len() > 0 {
-                team = heap.Pop(ranks).(orsa.TeamRank)
+                team = heap.Pop(ranks).(matcher.TeamRank)
             } else {
                 team = interleave[0]
                 interleave = interleave[1:len(interleave)]
@@ -165,7 +165,7 @@ func MakeMatches(matches []orsa.MatchGroup, interleave []orsa.TeamRank, ranks *o
         for _,team := range deferredTeams {
             heap.Push(ranks, team)
         }
-        deferredTeams = []orsa.TeamRank{}
+        deferredTeams = []matcher.TeamRank{}
 
         if validTeams {
             currentMatch.AvgPoints /= float64(currentMatch.N)
@@ -182,14 +182,14 @@ func MakeMatches(matches []orsa.MatchGroup, interleave []orsa.TeamRank, ranks *o
             for _,t := range interleave {
                 heap.Push(ranks, t)
             }
-            interleave = []orsa.TeamRank{}
+            interleave = []matcher.TeamRank{}
         }
     }
 
     return matches
 }
 
-func PrintMatchesReddit (matches []orsa.MatchGroup) {
+func PrintMatchesReddit (matches []matcher.MatchGroup) {
     const MatchHeader string = "**Groups for Week %d of the %s %s league are as follows:**\n\n"
     fmt.Printf(MatchHeader, *week, *format, strings.ToUpper(*platform))
     for group, match := range matches {
@@ -197,13 +197,13 @@ func PrintMatchesReddit (matches []orsa.MatchGroup) {
     }
 }
 
-func PrintMatchesORSA (matches []orsa.MatchGroup) {
+func PrintMatchesORSA (matches []matcher.MatchGroup) {
     for group, match := range matches {
         fmt.Println(match.ToStringORSA(group+1, *week, *platform, *format))
     }
 }
 
-func PrintMatchesFlat (matches []orsa.MatchGroup) {
+func PrintMatchesFlat (matches []matcher.MatchGroup) {
     out := ""
     for _, match := range matches {
         for i, t := range match.Teams {
@@ -227,10 +227,10 @@ func main() {
 
     if *team1 != "" && *team2 != "" {
         //Print markup for team names
-        teamRank1 := orsa.TeamRank{Name: *team1}
-        teamRank2 := orsa.TeamRank{Name: *team2}
+        teamRank1 := matcher.TeamRank{Name: *team1}
+        teamRank2 := matcher.TeamRank{Name: *team2}
         //match group with one empty match
-        fakeMatch := []orsa.MatchGroup{{}}
+        fakeMatch := []matcher.MatchGroup{{}}
         fakeMatch[0].Teams[0] = teamRank1
         fakeMatch[0].Teams[1] = teamRank2
         fakeMatch[0].N = 2
@@ -251,10 +251,10 @@ func main() {
     }
     defer rankFile.Close()
 
-    ranks := &orsa.RankedList{}
+    ranks := &matcher.RankedList{}
     heap.Init(ranks)
 
-    unsortedRanks := []*orsa.TeamRank{}
+    unsortedRanks := []*matcher.TeamRank{}
     if err := gocsv.UnmarshalFile(rankFile, &unsortedRanks); err != nil {
         panic(err)
     }
@@ -264,16 +264,16 @@ func main() {
     }
 
     groups := readGroups(groupsFileName)
-    matches := []orsa.MatchGroup{}
+    matches := []matcher.MatchGroup{}
 
     maxAttempts := 11
     attemptNum := 1
-    leftoverTeams := []orsa.TeamRank{}
-    matches = MakeMatches(matches, []orsa.TeamRank{}, ranks, groups)
+    leftoverTeams := []matcher.TeamRank{}
+    matches = MakeMatches(matches, []matcher.TeamRank{}, ranks, groups)
     for ranks.Len() > 1 && attemptNum < maxAttempts {
         //move leftover teams into an interleave group
         for ranks.Len() > 0 {
-            leftoverTeams = append(leftoverTeams, heap.Pop(ranks).(orsa.TeamRank))
+            leftoverTeams = append(leftoverTeams, heap.Pop(ranks).(matcher.TeamRank))
         }
 
         //disband a number of teams
@@ -286,7 +286,7 @@ func main() {
         fmt.Printf("%d leftover, %d pool\n", len(leftoverTeams), ranks.Len())
         matches = MakeMatches(matches, leftoverTeams, ranks, groups)
 
-        leftoverTeams = []orsa.TeamRank{}
+        leftoverTeams = []matcher.TeamRank{}
         attemptNum++
     }
 
