@@ -1,0 +1,3 @@
+package: github.com/RocketSportsAssociation/matcher
+import:
+- package: github.com/gocarina/gocsv
